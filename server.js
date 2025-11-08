@@ -39,89 +39,82 @@ function getBotIds(room) {
   return Object.keys(room.players).filter(id => room.players[id].isAI);
 }
 
-// ================== OLLAMA INTEGRATION ==================
+// ================== AI SERVICE INTEGRATION ==================
+// Python AI service runs on port 5000
+const AI_SERVICE_URL = 'http://localhost:5000';
 
-const OLLAMA_MODEL = 'gpt-oss:120b-cloud'; // change if needed
-
-async function ollamaGenerate(prompt) {
-  const res = await fetch('http://localhost:11434/api/generate', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: OLLAMA_MODEL,
-      prompt,
-      stream: false
-    })
-  });
-
-  if (!res.ok) {
-    console.error('Ollama error status:', res.status);
-    throw new Error('Ollama request failed');
-  }
-
-  const data = await res.json();
-  return (data.response || '').trim();
-}
-
-// Generate a *prompt* for the round (AI host)
+// Generate a *prompt* for the round (AI host using Claude Opus 4)
 async function generatePrompt() {
-  const promptForModel = `
-You are designing prompts for a party game where humans and AI both answer.
-Choose one topic randomly from below and write a whacky and humorous question about it that people can answer in 1–3 sentences. Limit the question to one part.
-Examples of style:
-- "Write a song lyric about stubbing your left toe"
-- "What is the most evil cake recipe you can think of?"
-Topics:
-music,
-birds,
-food,
-prehistoric animals,
-Space travel
+  try {
+    const res = await fetch(`${AI_SERVICE_URL}/generate-prompt`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
 
-Rules:
-- Output ONLY the question text, no quotes, no explanations, no numbering.
-- The question must not mention AI, the game, or being a contestant.
-`.trim();
+    if (!res.ok) {
+      console.error('AI service error status:', res.status);
+      throw new Error('AI service request failed');
+    }
 
-  return await ollamaGenerate(promptForModel);
-}
+    const data = await res.json();
+    if (!data.success) {
+      throw new Error(data.error || 'AI service returned error');
+    }
 
-// Generate ONE AI answer to the given round prompt
-async function generateAIAnswer(roundPrompt) {
-  const fullPrompt = `
-You are a contestant in a party game trying to sound like a real human.
-Respond in 1-3 sentences to this question but try to stay close to 1:
-
-"${roundPrompt}"
-
-Do NOT say you are an AI or language model.
-Just answer like a normal college student in a casual, lighthearted, and joking way. Keep it as short as possible and do not go over the top.
-`.trim();
-
-  return await ollamaGenerate(fullPrompt);
+    return data.prompt;
+  } catch (err) {
+    console.error('Error generating prompt:', err);
+    throw err;
+  }
 }
 
 // Generate answers for each bot player in the room
+// Uses batch endpoint for efficiency - Opus 4 and Sonnet 4
 async function generateBotAnswers(room) {
   const prompt = room.round.prompt;
   const botIds = getBotIds(room);
-  const answers = [];
+  
+  try {
+    const res = await fetch(`${AI_SERVICE_URL}/generate-batch-answers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt,
+        bot_ids: botIds
+      })
+    });
 
-  for (const botId of botIds) {
-    try {
-      const text = await generateAIAnswer(prompt);
-      answers.push({
-        id: `ai-${Date.now()}-${botId}-${Math.random().toString(36).slice(2, 6)}`,
-        text,
-        isAI: true,
-        authorId: botId
-      });
-    } catch (err) {
-      console.error('Failed to generate bot answer:', err);
+    if (!res.ok) {
+      console.error('AI service error status:', res.status);
+      throw new Error('AI service batch request failed');
     }
-  }
 
-  return answers;
+    const data = await res.json();
+    if (!data.success) {
+      throw new Error(data.error || 'AI service returned error');
+    }
+
+    // Convert AI service responses to game answer format
+    const answers = [];
+    for (const botAnswer of data.answers) {
+      if (botAnswer.success) {
+        answers.push({
+          id: `ai-${Date.now()}-${botAnswer.bot_id}-${Math.random().toString(36).slice(2, 6)}`,
+          text: botAnswer.answer,
+          isAI: true,
+          authorId: botAnswer.bot_id
+        });
+        console.log(`Bot ${botAnswer.bot_id} using ${botAnswer.model_used}: ${botAnswer.answer}`);
+      } else {
+        console.error(`Failed to generate answer for ${botAnswer.bot_id}:`, botAnswer.error);
+      }
+    }
+
+    return answers;
+  } catch (err) {
+    console.error('Error generating bot answers:', err);
+    return []; // Return empty array on error
+  }
 }
 
 // ================== SOCKET.IO LOGIC ==================
