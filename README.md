@@ -2,6 +2,8 @@
 
 A web-based gameshow where humans compete with AI contestants! Players answer whacky questions, then try to guess which answers were written by AI and which by humans.
 
+**NEW**: The AI bots now learn from previous rounds! They analyze human responses from past games to better mimic human writing styles.
+
 ## 🎯 Game Overview
 
 1. **AI Host**: Claude Opus 4 generates creative and whacky questions
@@ -9,13 +11,22 @@ A web-based gameshow where humans compete with AI contestants! Players answer wh
    - Bot 1: Claude Opus 4 (claude-opus-4-20250514-v1:0)
    - Bot 2: Claude Sonnet 4 (claude-sonnet-4-20250514-v1:0)
 3. **Human Players**: Try to blend in with AI answers or spot the AI!
+4. **Learning System**: AI bots learn from the last 15 rounds to improve their responses
+
+## 🧠 How AI Learning Works
+
+The game stores responses from each round in a local database. When generating answers:
+- AI bots receive examples of **human responses** from previous rounds to mimic their style
+- AI bots also see their own **previous AI responses** to learn what patterns to avoid
+- The system uses only the **most recent 15 rounds** to keep data fresh and relevant
+- All data is stored locally in `gameshow.db` (automatically created)
 
 ## 🏗️ Architecture
 
 The project consists of two services:
 
 - **Node.js Game Server** (port 3000): Handles the game logic, rooms, and Socket.IO connections
-- **Python AI Service** (port 5000): Interfaces with LiteLLM to generate questions and AI answers
+- **Python AI Service** (port 5000): Interfaces with LiteLLM to generate questions and AI answers, manages the learning database
 
 ## 📋 Prerequisites
 
@@ -115,15 +126,46 @@ Edit `server.js` (around line 163):
 const botCount = 2; // change to add more bots
 ```
 
+### Configure Historical Data Limit
+
+Edit `game_database.py` to change how many rounds the AI learns from:
+```python
+MAX_HISTORICAL_ROUNDS = 15  # Change this to use more or fewer rounds
+```
+
+### View Database Statistics
+
+You can check how much data has been collected:
+```bash
+curl http://localhost:5000/stats
+```
+
+This will show:
+- Total rounds played
+- Number of human responses
+- Number of AI responses
+
+### Reset the Learning Database
+
+To start fresh and clear all learned data:
+```bash
+rm gameshow.db
+```
+
+The database will be recreated automatically on the next game.
+
 ## 📁 Project Structure
 
 ```
 The-Turing-Test-Gameshow/
 ├── server.js              # Node.js game server
 ├── ai_service.py          # Python AI service
+├── game_database.py       # Database management for AI learning
 ├── requirements.txt       # Python dependencies
 ├── package.json           # Node.js dependencies
 ├── start.sh              # Startup script
+├── test_database.py      # Test script for database functionality
+├── gameshow.db           # SQLite database (auto-created, stores game history)
 ├── public/
 │   └── index.html        # Game UI
 └── README.md             # This file
