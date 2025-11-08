@@ -200,6 +200,11 @@
       font-size: 0.85rem;
     }
 
+    #scoreboardList {
+      padding-left: 18px;
+      margin-top: 4px;
+    }
+
     @media (max-width: 640px) {
       .card { padding: 18px 16px 16px; }
       h1 { font-size: 1.6rem; }
@@ -214,12 +219,22 @@
         <span class="badge">AI Hosted</span>
       </h1>
 
+      <!-- Background music -->
+      <audio id="bgm" src="/bgm.mp3" loop></audio>
+
       <div id="auth">
         <p class="muted">Enter your name to join a room.</p>
         <div class="row">
           <div class="col">
             <label for="nameInput" class="muted">Your name</label>
             <input id="nameInput" placeholder="e.g. Patrick" />
+          </div>
+        </div>
+        
+        <div class="row" style="margin-top: 8px;">
+          <div class="col">
+            <label class="muted" for="volumeSlider">Music volume</label>
+            <input id="volumeSlider" type="range" min="0" max="1" step="0.01" value="0.35" />
           </div>
         </div>
 
@@ -256,7 +271,7 @@
 
         <div id="scoreboardSection" style="margin-top:10px;">
           <h3>Scoreboard</h3>
-          <ol id="scoreboardList" style="padding-left:18px; margin-top:4px;"></ol>
+          <ol id="scoreboardList"></ol>
         </div>
 
         <div id="hostPanel" style="margin-top: 8px;">
@@ -309,15 +324,35 @@
     const playersList = document.getElementById('playersList');
     const myScore = document.getElementById('myScore');
     const phaseLabel = document.getElementById('phase');
+    const bgm = document.getElementById('bgm');
+
+    let bgmStarted = false;
+    const volumeSlider = document.getElementById('volumeSlider');
+    if (volumeSlider && bgm) {
+      // initial value
+      bgm.volume = parseFloat(volumeSlider.value);
+
+      volumeSlider.addEventListener('input', (e) => {
+        bgm.volume = parseFloat(e.target.value);
+      });
+    }
+
+    function startBgmOnce() {
+      if (!bgm || bgmStarted) return;
+      bgmStarted = true;
+      bgm.play().catch(err => {
+    console.log('Audio play blocked:', err);
+  });
+    }
+
+    // Start music on first user interaction (click anywhere)
+    document.addEventListener('click', startBgmOnce, { once: true });
 
     // ---------- SCOREBOARD ----------
     function renderScoreboard(players) {
       const scoreboardList = document.getElementById('scoreboardList');
       const entries = Object.entries(players);
-
-      // sort by score desc
       entries.sort((a, b) => b[1].score - a[1].score);
-
       scoreboardList.innerHTML = '';
       entries.forEach(([id, p]) => {
         const li = document.createElement('li');
@@ -358,6 +393,12 @@
       authDiv.classList.add('hidden');
       gameDiv.classList.remove('hidden');
       roomCodeLabel.innerText = roomCode;
+
+      // Stop music once user is in a lobby
+      if (bgm && !bgm.paused) {
+        bgm.pause();
+        bgm.currentTime = 0;
+      }
     }
 
     document.getElementById('startRoundBtn').onclick = () => {
