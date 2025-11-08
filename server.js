@@ -102,7 +102,8 @@ async function generateBotAnswers(room) {
           id: `ai-${Date.now()}-${botAnswer.bot_id}-${Math.random().toString(36).slice(2, 6)}`,
           text: botAnswer.answer,
           isAI: true,
-          authorId: botAnswer.bot_id
+          authorId: botAnswer.bot_id,
+          modelUsed: botAnswer.model_used
         });
         console.log(`Bot ${botAnswer.bot_id} using ${botAnswer.model_used}: ${botAnswer.answer}`);
       } else {
@@ -114,6 +115,43 @@ async function generateBotAnswers(room) {
   } catch (err) {
     console.error('Error generating bot answers:', err);
     return []; // Return empty array on error
+  }
+}
+
+// Save round data to the AI service database for future learning
+async function saveRoundData(room) {
+  if (!room.round) return;
+  
+  try {
+    const responses = room.round.answers.map(answer => ({
+      text: answer.text,
+      isAI: answer.isAI,
+      authorId: answer.authorId,
+      modelUsed: answer.modelUsed || null
+    }));
+
+    const res = await fetch(`${AI_SERVICE_URL}/save-round`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: room.round.prompt,
+        responses: responses
+      })
+    });
+
+    if (!res.ok) {
+      console.error('Failed to save round data:', res.status);
+      return;
+    }
+
+    const data = await res.json();
+    if (data.success) {
+      console.log(`Saved round data: ${data.message}`);
+    } else {
+      console.error('Error saving round:', data.error);
+    }
+  } catch (err) {
+    console.error('Error saving round data:', err);
   }
 }
 
@@ -254,6 +292,9 @@ io.on('connection', (socket) => {
     if (humanGuessesCount === humanCount) {
       room.round.stage = 'results';
       scoreRound(room);
+
+      // Save round data to the AI service database
+      saveRoundData(room);
 
       io.to(roomCode).emit('round_results', {
         answers: room.round.answers,
