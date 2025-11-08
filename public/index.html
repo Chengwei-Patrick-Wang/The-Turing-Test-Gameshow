@@ -19,9 +19,7 @@
       --transition-fast: 0.18s ease-out;
     }
 
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     body {
       margin: 0;
@@ -36,10 +34,7 @@
       color: var(--text-main);
     }
 
-    .app {
-      width: 100%;
-      max-width: 960px;
-    }
+    .app { width: 100%; max-width: 960px; }
 
     .card {
       background: var(--card-bg);
@@ -69,28 +64,12 @@
       color: var(--text-muted);
     }
 
-    h2 {
-      margin: 8px 0 6px;
-      font-size: 1.05rem;
-      font-weight: 600;
-    }
+    h2 { margin: 8px 0 6px; font-size: 1.05rem; font-weight: 600; }
+    h3 { margin: 14px 0 8px; font-size: 0.98rem; font-weight: 600; }
 
-    h3 {
-      margin: 14px 0 8px;
-      font-size: 0.98rem;
-      font-weight: 600;
-    }
+    p { margin: 6px 0; font-size: 0.92rem; color: var(--text-muted); }
 
-    p {
-      margin: 6px 0;
-      font-size: 0.92rem;
-      color: var(--text-muted);
-    }
-
-    .muted {
-      color: var(--text-muted);
-      font-size: 0.86rem;
-    }
+    .muted { color: var(--text-muted); font-size: 0.86rem; }
 
     .row {
       display: flex;
@@ -99,10 +78,7 @@
       margin-top: 6px;
     }
 
-    .col {
-      flex: 1 1 260px;
-      min-width: 0;
-    }
+    .col { flex: 1 1 260px; min-width: 0; }
 
     input, textarea {
       width: 100%;
@@ -126,10 +102,7 @@
       background: rgba(15, 23, 42, 0.96);
     }
 
-    textarea {
-      resize: vertical;
-      min-height: 70px;
-    }
+    textarea { resize: vertical; min-height: 70px; }
 
     button {
       border-radius: 999px;
@@ -171,9 +144,7 @@
       box-shadow: 0 10px 25px rgba(15, 23, 42, 0.7);
     }
 
-    .hidden {
-      display: none;
-    }
+    .hidden { display: none; }
 
     .section-header {
       display: flex;
@@ -192,11 +163,7 @@
       background: rgba(15, 23, 42, 0.9);
     }
 
-    #phase {
-      margin-bottom: 4px;
-      font-size: 0.9rem;
-      color: var(--accent);
-    }
+    #phase { margin-bottom: 4px; font-size: 0.9rem; color: var(--accent); }
 
     .answer-card {
       border-radius: 14px;
@@ -207,9 +174,7 @@
       font-size: 0.9rem;
     }
 
-    .answer-card strong {
-      font-size: 0.9rem;
-    }
+    .answer-card strong { font-size: 0.9rem; }
 
     .answer-card footer {
       margin-top: 4px;
@@ -236,12 +201,8 @@
     }
 
     @media (max-width: 640px) {
-      .card {
-        padding: 18px 16px 16px;
-      }
-      h1 {
-        font-size: 1.6rem;
-      }
+      .card { padding: 18px 16px 16px; }
+      h1 { font-size: 1.6rem; }
     }
   </style>
 </head>
@@ -249,16 +210,16 @@
   <div class="app">
     <div class="card">
       <h1>
-        Human vs AI Game Show
+        The Turing Test Game Show
         <span class="badge">AI Hosted</span>
       </h1>
 
       <div id="auth">
-        <p class="muted">Enter your name to join a room. The AI will host the game and generate questions.</p>
+        <p class="muted">Enter your name to join a room.</p>
         <div class="row">
           <div class="col">
             <label for="nameInput" class="muted">Your name</label>
-            <input id="nameInput" placeholder="e.g. Alex" />
+            <input id="nameInput" placeholder="e.g. Patrick" />
           </div>
         </div>
 
@@ -292,6 +253,11 @@
           Players:
           <span id="playersList"></span>
         </p>
+
+        <div id="scoreboardSection" style="margin-top:10px;">
+          <h3>Scoreboard</h3>
+          <ol id="scoreboardList" style="padding-left:18px; margin-top:4px;"></ol>
+        </div>
 
         <div id="hostPanel" style="margin-top: 8px;">
           <h3>Game Controls</h3>
@@ -343,6 +309,23 @@
     const playersList = document.getElementById('playersList');
     const myScore = document.getElementById('myScore');
     const phaseLabel = document.getElementById('phase');
+
+    // ---------- SCOREBOARD ----------
+    function renderScoreboard(players) {
+      const scoreboardList = document.getElementById('scoreboardList');
+      const entries = Object.entries(players);
+
+      // sort by score desc
+      entries.sort((a, b) => b[1].score - a[1].score);
+
+      scoreboardList.innerHTML = '';
+      entries.forEach(([id, p]) => {
+        const li = document.createElement('li');
+        const label = p.isAI ? `${p.name} [AI]` : p.name;
+        li.textContent = `${label} — ${p.score} pts`;
+        scoreboardList.appendChild(li);
+      });
+    }
 
     document.getElementById('createBtn').onclick = () => {
       const name = document.getElementById('nameInput').value.trim();
@@ -420,6 +403,8 @@
       }
       playersList.innerHTML = playerSpans.join('');
       myScore.innerText = myScoreVal;
+
+      renderScoreboard(room.players);
     });
 
     socket.on('round_started', ({ prompt }) => {
@@ -487,6 +472,8 @@
       }
       playersList.innerHTML = playerSpans.join('');
       myScore.innerText = myScoreVal;
+
+      renderScoreboard(players);
 
       document.getElementById('resultsPhase').classList.remove('hidden');
       document.getElementById('guessPhase').classList.add('hidden');

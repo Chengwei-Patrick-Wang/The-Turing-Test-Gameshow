@@ -72,11 +72,11 @@ Examples of style:
 - "Write a song lyric about stubbing your left toe"
 - "What is the most evil cake recipe you can think of?"
 Topics:
-music,
+[music,
 birds,
 food,
 prehistoric animals,
-Space travel
+Space travel]
 
 Rules:
 - Output ONLY the question text, no quotes, no explanations, no numbering.
