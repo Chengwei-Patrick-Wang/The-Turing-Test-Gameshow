@@ -29,7 +29,8 @@ app.use(express.static('public'));
 //     answerTimeout,
 //     guessTimeout,
 //     answerEndsAt,
-//     guessEndsAt
+//     guessEndsAt,
+//     databaseRoundId // optional
 //   }
 // }
 const rooms = {};
@@ -96,7 +97,9 @@ async function generateAIAnswer(roundPrompt, botIndex = 0, currentRoundId = null
   }
 
   const data = await res.json();
-  console.log(`Generated answer from ${data.model} (used ${data.examples_used || 0} past examples)`);
+  console.log(
+    `Generated answer from ${data.model} (used ${data.examples_used || 0} past examples)`
+  );
   return data.answer;
 }
 
@@ -115,7 +118,9 @@ async function generateBotAnswers(room) {
     try {
       const text = await generateAIAnswer(prompt, i, currentRoundId);
       answers.push({
-        id: `ai-${Date.now()}-${botId}-${Math.random().toString(36).slice(2, 6)}`,
+        id: `ai-${Date.now()}-${botId}-${Math.random()
+          .toString(36)
+          .slice(2, 6)}`,
         text,
         isAI: true,
         authorId: botId
@@ -173,10 +178,64 @@ async function storeRoundInDatabase(room) {
   }
 
   const data = await res.json();
-  console.log(`✅ Stored round ${data.round_id} in database`);
-  console.log(`   Database stats: ${data.stats.total_rounds} rounds, ${data.stats.total_answers} answers`);
+  console.log(
+    `✅ Stored round ${data.round_id} in database (rounds=${data.stats.total_rounds}, answers=${data.stats.total_answers})`
+  );
+
+  // stash DB id on the round if you want it later
+  room.round.databaseRoundId = data.round_id;
 
   return data.round_id;
+}
+
+// Move room into guessing phase for everyone
+function startGuessingPhase(room) {
+  if (!room || !room.round) return;
+
+  // Clear answer timeout if still running
+  if (room.round.answerTimeout) {
+    clearTimeout(room.round.answerTimeout);
+    room.round.answerTimeout = null;
+  }
+
+  // Move to guessing stage
+  room.round.stage = 'guessing';
+  room.round.guessEndsAt = Date.now() + GUESS_DURATION_MS;
+
+  // Shuffle answers for display
+  const shuffled = [...room.round.answers];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+
+  // Start guess timer
+  room.round.guessTimeout = setTimeout(() => {
+    const current = rooms[room.code];
+    if (!current || !current.round) return;
+    if (current.round.stage !== 'guessing') return;
+
+    // Time's up - move to results
+    current.round.stage = 'results';
+    scoreRound(current);
+
+    // Store round in database
+    storeRoundInDatabase(current).catch(err => {
+      console.error('Failed to store round in database:', err);
+    });
+
+    io.to(room.code).emit('round_results', {
+      answers: current.round.answers,
+      players: current.players
+    });
+  }, GUESS_DURATION_MS);
+
+  // Emit to all clients
+  // IMPORTANT: event name matches client (`socket.on("start_guessing", ...)`)
+  io.to(room.code).emit('start_guessing', {
+    answers: shuffled,
+    guessDuration: GUESS_DURATION_MS
+  });
 }
 
 // ================== SOCKET.IO LOGIC ==================
@@ -193,9 +252,8 @@ io.on('connection', (socket) => {
     };
 
     // Add AI players to the room
-    const botCount = 2; // Two bots: Opus 4 and Sonnet 4
     const botNames = ['Opus 4', 'Sonnet 4'];
-    for (let i = 0; i < botCount; i++) {
+    for (let i = 0; i < botNames.length; i++) {
       const botId = `bot-${code}-${i}`;
       players[botId] = {
         name: botNames[i],
@@ -254,7 +312,8 @@ io.on('connection', (socket) => {
         answerTimeout: null,
         guessTimeout: null,
         answerEndsAt: Date.now() + ANSWER_DURATION_MS,
-        guessEndsAt: null
+        guessEndsAt: null,
+        databaseRoundId: null
       };
 
       // Bot players submit their answers immediately
@@ -262,7 +321,10 @@ io.on('connection', (socket) => {
       room.round.answers.push(...botAnswers);
 
       console.log('Room', roomCode, 'prompt:', prompt);
-      console.log('Bot answers:', botAnswers.map(a => `${a.text} (by ${a.authorId})`));
+      console.log(
+        'Bot answers:',
+        botAnswers.map(a => `${a.text} (by ${a.authorId})`)
+      );
 
       // start answer timer
       room.round.answerTimeout = setTimeout(() => {
@@ -321,7 +383,9 @@ io.on('connection', (socket) => {
     if (room.players[socket.id]?.isAI) return;
 
     // Overwrite previous guesses from this player if they resubmit
-    const existingIndex = room.round.guesses.findIndex(g => g.playerId === socket.id);
+    const existingIndex = room.round.guesses.findIndex(
+      g => g.playerId === socket.id
+    );
     if (existingIndex >= 0) {
       room.round.guesses[existingIndex] = { playerId: socket.id, guesses };
     } else {
@@ -334,6 +398,13 @@ io.on('connection', (socket) => {
     // If all humans have guessed before time is up, finish early
     if (humanGuessesCount === humanCount) {
       room.round.stage = 'results';
+
+      // clear guess timer if still ticking
+      if (room.round.guessTimeout) {
+        clearTimeout(room.round.guessTimeout);
+        room.round.guessTimeout = null;
+      }
+
       scoreRound(room);
 
       // Store round in database
@@ -395,16 +466,20 @@ function scoreRound(room) {
 
   // Fooling bonus for HUMAN answers: others guessed "AI" on a human answer
   for (const ans of room.round.answers) {
-    if (ans.isAI) continue;         // only human-written answers
+    if (ans.isAI) continue; // only human-written answers
     if (!ans.authorId) continue;
 
     const author = room.players[ans.authorId];
     if (!author) continue;
 
     const allGuesses = room.round.guesses.flatMap(g => g.guesses);
-    const guessesForThis = allGuesses.filter(g => g.answerId === ans.id);
+    const guessesForThis = allGuesses.filter(
+      g => g.answerId === ans.id
+    );
 
-    const fooledCount = guessesForThis.filter(g => g.guessedIsAI === true).length;
+    const fooledCount = guessesForThis.filter(
+      g => g.guessedIsAI === true
+    ).length;
     author.score += fooledCount * FOOL_POINTS;
   }
 
