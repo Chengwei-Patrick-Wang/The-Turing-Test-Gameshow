@@ -64,13 +64,14 @@ async function generatePrompt() {
 
 // Generate ONE AI answer to the given round prompt
 // Uses Claude Opus 4 for Bot 0, Claude Sonnet 4 for Bot 1
-async function generateAIAnswer(roundPrompt, botIndex = 0) {
+async function generateAIAnswer(roundPrompt, botIndex = 0, currentRoundId = null) {
   const res = await fetch(`${AI_SERVICE_URL}/generate_answer`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       prompt: roundPrompt,
-      bot_index: botIndex
+      bot_index: botIndex,
+      current_round_id: currentRoundId
     })
   });
 
@@ -82,7 +83,7 @@ async function generateAIAnswer(roundPrompt, botIndex = 0) {
   }
 
   const data = await res.json();
-  console.log(`Generated answer from ${data.model}`);
+  console.log(`Generated answer from ${data.model} (used ${data.examples_used || 0} past examples)`);
   return data.answer;
 }
 
@@ -93,10 +94,13 @@ async function generateBotAnswers(room) {
   const botIds = getBotIds(room);
   const answers = [];
 
+  // Get current round ID if it exists (for excluding from few-shot examples)
+  const currentRoundId = room.round.databaseRoundId || null;
+
   for (let i = 0; i < botIds.length; i++) {
     const botId = botIds[i];
     try {
-      const text = await generateAIAnswer(prompt, i);
+      const text = await generateAIAnswer(prompt, i, currentRoundId);
       answers.push({
         id: `ai-${Date.now()}-${botId}-${Math.random().toString(36).slice(2, 6)}`,
         text,
@@ -109,6 +113,57 @@ async function generateBotAnswers(room) {
   }
 
   return answers;
+}
+
+// Store completed round in the database
+async function storeRoundInDatabase(room) {
+  const question = room.round.prompt;
+  const answers = [];
+
+  // Get bot names mapping
+  const botNames = ['Opus 4', 'Sonnet 4'];
+  const botIds = getBotIds(room);
+
+  // Collect all answers
+  for (const ans of room.round.answers) {
+    const isAI = ans.isAI;
+    let aiModel = null;
+
+    if (isAI) {
+      // Find which bot this is
+      const botIndex = botIds.indexOf(ans.authorId);
+      if (botIndex >= 0 && botIndex < botNames.length) {
+        aiModel = botNames[botIndex];
+      }
+    }
+
+    answers.push({
+      answer: ans.text,
+      is_ai: isAI,
+      ai_model: aiModel
+    });
+  }
+
+  const res = await fetch(`${AI_SERVICE_URL}/store_round`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      question,
+      answers
+    })
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.error('Failed to store round:', errorText);
+    throw new Error('Failed to store round in database');
+  }
+
+  const data = await res.json();
+  console.log(`✅ Stored round ${data.round_id} in database`);
+  console.log(`   Database stats: ${data.stats.total_rounds} rounds, ${data.stats.total_answers} answers`);
+
+  return data.round_id;
 }
 
 // ================== SOCKET.IO LOGIC ==================
@@ -249,6 +304,11 @@ io.on('connection', (socket) => {
     if (humanGuessesCount === humanCount) {
       room.round.stage = 'results';
       scoreRound(room);
+
+      // Store round in database
+      storeRoundInDatabase(room).catch(err => {
+        console.error('Failed to store round in database:', err);
+      });
 
       io.to(roomCode).emit('round_results', {
         answers: room.round.answers,

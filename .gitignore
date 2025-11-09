@@ -2,3 +2,18 @@ node_modules
 .env
 .DS_Store
 114_611_In_Class_Exercise_(Nov_6)_ssura_copy.ipynb
+
+# Database files
+game_history.db
+game_history_backup_*.db
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Logs
+*.log
+ai_service.log
+nohup.out

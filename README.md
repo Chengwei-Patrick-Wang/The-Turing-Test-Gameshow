@@ -10,6 +10,8 @@ In this game:
 3. Human players try to guess which answers were written by AI
 4. Points are awarded for correct guesses and for fooling other players
 
+**NEW**: The game now includes a **database system** that stores all rounds and uses **few-shot learning** to help the AI bots improve over time by learning from past answers! See [DATABASE.md](DATABASE.md) for details.
+
 ## AI Models Used
 
 - **Question Generator**: Claude Opus 4 (`claude-opus-4-20250514-v1:0`)

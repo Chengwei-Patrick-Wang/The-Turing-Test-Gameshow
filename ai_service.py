@@ -9,9 +9,13 @@ from flask_cors import CORS
 import os
 from dotenv import load_dotenv
 import requests
+import database
 
 # Load environment variables
 load_dotenv()
+
+# Initialize database
+database.init_database()
 
 app = Flask(__name__)
 CORS(app)
@@ -26,6 +30,7 @@ API_BASE_URL = "https://ai-gateway.andrew.cmu.edu/v1/chat/completions"
 
 # Model configurations
 OPUS_4_MODEL = "claude-opus-4-20250514-v1:0"
+SONNET_4_MODEL = "claude-sonnet-4-20250514-v1:0"
 SONNET_4_MODEL = "claude-sonnet-4-20250514-v1:0"
 
 def call_llm(model, system_prompt, user_prompt, max_tokens=500):
@@ -109,10 +114,12 @@ def generate_answer():
     """
     Generate an AI answer to the given prompt
     Alternates between Opus 4 (bot 0) and Sonnet 4 (bot 1)
+    Uses few-shot learning with past game rounds
     """
     data = request.json
     round_prompt = data.get('prompt', '')
     bot_index = data.get('bot_index', 0)
+    current_round_id = data.get('current_round_id', None)
     
     if not round_prompt:
         return jsonify({"error": "No prompt provided"}), 400
@@ -121,7 +128,19 @@ def generate_answer():
     model = OPUS_4_MODEL if bot_index == 0 else SONNET_4_MODEL
     bot_name = "Opus 4" if bot_index == 0 else "Sonnet 4"
     
-    system_prompt = """You are a contestant in a party game trying to sound like a real human.
+    # Get distinct random samples for each bot (10 examples each)
+    # Get two distinct samples so each bot sees different examples
+    samples = database.get_distinct_random_samples(
+        sample_size=10,
+        num_samples=2,
+        exclude_round_id=current_round_id
+    )
+    
+    # Use the appropriate sample for this bot
+    bot_sample = samples[bot_index] if len(samples) > bot_index else []
+    
+    # Build system prompt with examples
+    base_system_prompt = """You are a contestant in a party game trying to sound like a real human.
 
 A real human doesn't use too many adjectives. A good strategy is to give the answer and the justification should be 1 reason. <thing/answer> because <reason>. Be a little whimsical with the reason.
 
@@ -129,6 +148,19 @@ You can be funny but don't try too hard. The answer should be something that a h
 
 Do NOT say you are an AI or language model.
 Just answer like a normal college student in a casual, lighthearted, and joking way. Keep it as short as possible and do not go over the top."""
+
+    # Add few-shot examples if available
+    if bot_sample:
+        examples_text = database.format_examples_for_prompt(bot_sample)
+        system_prompt = f"""{base_system_prompt}
+
+Here are some examples from past rounds to help you understand the style:
+
+{examples_text}
+
+Remember: Your goal is to sound human and casual. Learn from these examples but make your answer unique to the new question."""
+    else:
+        system_prompt = base_system_prompt
 
     user_prompt = f"""Respond in 1-3 sentences to this question but try to stay close to 1:
 
@@ -138,9 +170,15 @@ Remember: Be casual, brief, and human-like!"""
 
     try:
         answer_text = call_llm(model, system_prompt, user_prompt, max_tokens=150)
+        
+        # Log that we used examples
+        num_examples = len(bot_sample)
+        print(f"Generated answer from {bot_name} using {num_examples} past examples")
+        
         return jsonify({
             "answer": answer_text,
-            "model": bot_name
+            "model": bot_name,
+            "examples_used": num_examples
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -198,9 +236,60 @@ def test_models():
     return jsonify(results)
 
 
+@app.route('/store_round', methods=['POST'])
+def store_round():
+    """
+    Store a completed round in the database
+    
+    Expected JSON:
+    {
+        "question": "The question that was asked",
+        "answers": [
+            {"answer": "text", "is_ai": true/false, "ai_model": "Opus 4" or null},
+            ...
+        ]
+    }
+    """
+    data = request.json
+    question = data.get('question', '')
+    answers = data.get('answers', [])
+    
+    if not question or not answers:
+        return jsonify({"error": "Missing question or answers"}), 400
+    
+    try:
+        round_id = database.store_round(question, answers)
+        stats = database.get_database_stats()
+        
+        return jsonify({
+            "success": True,
+            "round_id": round_id,
+            "stats": stats
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/database_stats', methods=['GET'])
+def get_stats():
+    """Get statistics about the game history database"""
+    try:
+        stats = database.get_database_stats()
+        return jsonify(stats)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 if __name__ == '__main__':
     print(f"Starting AI Service with models:")
     print(f"  - Bot 0: {OPUS_4_MODEL}")
     print(f"  - Bot 1: {SONNET_4_MODEL}")
     print(f"  - Gateway: {API_BASE_URL}")
+    print(f"  - Database: {database.DB_PATH}")
+    
+    # Show current database stats
+    stats = database.get_database_stats()
+    print(f"  - Stored rounds: {stats['total_rounds']}")
+    print(f"  - Total answers: {stats['total_answers']} ({stats['ai_answers']} AI, {stats['human_answers']} Human)")
+    
     app.run(host='0.0.0.0', port=5000, debug=True)
