@@ -55,8 +55,8 @@ function getBotIds(room) {
 
 // ================== AI SERVICE INTEGRATION ==================
 // Python Flask service using LiteLLM with Claude Opus 4 and Sonnet 4
-
-const AI_SERVICE_URL = 'http://localhost:5000';
+// Allow overriding via environment (useful if port 5000 is occupied on macOS)
+const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:5000';
 
 // Generate a *prompt* for the round (uses Claude Opus 4)
 async function generatePrompt() {

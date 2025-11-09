@@ -291,5 +291,12 @@ if __name__ == '__main__':
     stats = database.get_database_stats()
     print(f"  - Stored rounds: {stats['total_rounds']}")
     print(f"  - Total answers: {stats['total_answers']} ({stats['ai_answers']} AI, {stats['human_answers']} Human)")
-    
-    app.run(host='0.0.0.0', port=5000, debug=True)
+
+    # Allow overriding the port via environment variable AI_SERVICE_PORT
+    try:
+        port = int(os.getenv('AI_SERVICE_PORT', '5000'))
+    except ValueError:
+        port = 5000
+
+    print(f"Starting Flask on port {port}")
+    app.run(host='0.0.0.0', port=port, debug=True)

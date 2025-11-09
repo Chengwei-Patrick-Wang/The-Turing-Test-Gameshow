@@ -24,7 +24,26 @@ fi
 
 echo "🤖 Starting AI Service (Python)..."
 source .venv/bin/activate
-python ai_service.py &
+# Ensure Python dependencies are installed in the venv
+if [ -f "requirements.txt" ]; then
+    echo "Installing Python dependencies..."
+    pip install --upgrade pip
+    pip install -r requirements.txt
+fi
+
+# Choose an AI service port. Port 5000 is the default but macOS sometimes
+# has system services listening on 5000 (Control Center). If 5000 is busy,
+# fall back to 5001 and export AI_SERVICE_URL so Node can find it.
+AI_PORT=5000
+if lsof -iTCP:${AI_PORT} -sTCP:LISTEN -n -P >/dev/null 2>&1; then
+    echo "Port ${AI_PORT} is in use; starting AI service on 5001 instead"
+    AI_PORT=5001
+fi
+export AI_SERVICE_PORT=${AI_PORT}
+export AI_SERVICE_URL="http://localhost:${AI_PORT}"
+
+# Start the AI service (it will pick up AI_SERVICE_PORT via environment)
+.venv/bin/python ai_service.py &
 AI_PID=$!
 echo "   ✅ AI Service running on http://localhost:5000 (PID: $AI_PID)"
 
@@ -32,6 +51,11 @@ echo "   ✅ AI Service running on http://localhost:5000 (PID: $AI_PID)"
 sleep 3
 
 echo "🌐 Starting Game Server (Node.js)..."
+# Install Node dependencies if missing
+if [ -f "package.json" ] && [ ! -d "node_modules" ]; then
+    echo "Installing Node dependencies..."
+    npm install
+fi
 node server.js &
 NODE_PID=$!
 echo "   ✅ Game Server running on http://localhost:3000 (PID: $NODE_PID)"
