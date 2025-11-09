@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="UTF-8" />
-    <title>The Turing Test Game Show</title>
+    <title>Turing Test: The Game Show</title>
 
     <!-- Futuristic fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -37,14 +37,10 @@
         align-items: center;
         justify-content: center;
         padding: 24px;
-        font-family: "Space Grotesk", system-ui, -apple-system, BlinkMacSystemFont,
-          "SF Pro Text", "Segoe UI", sans-serif;
+        font-family: "Space Grotesk", system-ui, -apple-system,
+          BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
         color: var(--text-main);
-        background: radial-gradient(
-            circle at 10% 0%,
-            #3b82f6 0,
-            transparent 45%
-          ),
+        background: radial-gradient(circle at 10% 0%, #3b82f6 0, transparent 45%),
           radial-gradient(circle at 90% 0%, #ec4899 0, transparent 45%),
           radial-gradient(circle at 0% 100%, #22c55e 0, transparent 45%),
           radial-gradient(circle at 100% 100%, #a855f7 0, transparent 45%),
@@ -58,16 +54,22 @@
         content: "";
         position: fixed;
         inset: 0;
-        background-image:
-          linear-gradient(rgba(56,189,248,0.5) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(56,189,248,0.5) 1px, transparent 1px);
+        background-image: linear-gradient(
+            rgba(56, 189, 248, 0.5) 1px,
+            transparent 1px
+          ),
+          linear-gradient(
+            90deg,
+            rgba(56, 189, 248, 0.5) 1px,
+            transparent 1px
+          );
         background-size: 42px 42px;
         opacity: 0.7;
         mix-blend-mode: screen;
         transform-origin: center bottom;
         transform: perspective(900px) rotateX(72deg) translateY(40%);
         pointer-events: none;
-        box-shadow: 0 0 40px rgba(56,189,248,0.6);
+        box-shadow: 0 0 40px rgba(56, 189, 248, 0.6);
       }
 
       /* DISCO LIGHT SWIRL LAYER */
@@ -212,8 +214,8 @@
         margin: 0 0 18px;
         font-size: 0.9rem;
         color: var(--text-muted);
-        font-family: "Space Grotesk", system-ui, -apple-system, BlinkMacSystemFont,
-          "SF Pro Text", "Segoe UI", sans-serif;
+        font-family: "Space Grotesk", system-ui, -apple-system,
+          BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
         text-transform: none;
         letter-spacing: 0;
       }
@@ -317,8 +319,8 @@
           0 12px 25px rgba(15, 23, 42, 0.9);
         transition: transform 0.16s ease-out, box-shadow 0.16s ease-out,
           filter 0.16s ease-out;
-        font-family: "Space Grotesk", system-ui, -apple-system, BlinkMacSystemFont,
-          "SF Pro Text", "Segoe UI", sans-serif;
+        font-family: "Space Grotesk", system-ui, -apple-system,
+          BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
       }
 
       button:hover {
@@ -509,6 +511,38 @@
         cursor: pointer;
       }
 
+      /* HOST INTRO BUBBLE */
+      .host-intro {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        margin: 10px 0 14px;
+        padding: 10px 12px;
+        border-radius: 16px;
+        background: radial-gradient(
+            circle at 0 0,
+            rgba(56, 189, 248, 0.18),
+            transparent 60%
+          ),
+          rgba(15, 23, 42, 0.9);
+        border: 1px solid rgba(148, 163, 184, 0.4);
+      }
+
+      .host-avatar {
+        font-size: 1.4rem;
+        line-height: 1;
+        margin-top: 2px;
+      }
+
+      .host-text {
+        font-size: 0.9rem;
+        color: var(--text-main);
+      }
+
+      .host-text strong {
+        color: var(--accent-yellow);
+      }
+
       /* INTRO OVERLAY */
       #introOverlay {
         position: fixed;
@@ -624,7 +658,7 @@
 
     <!-- INTRO OVERLAY -->
     <div id="introOverlay">
-      <div id="introText1">The Turing Test:</div>
+      <div id="introText1">Turing Test:</div>
       <div id="introText2">The Game Show</div>
     </div>
 
@@ -632,14 +666,20 @@
       <div class="card">
         <h1>
           <span class="logo-accent">◎</span>
-          The Turing Test Game Show
+          Turing Test: The Game Show
         </h1>
         <p class="subtitle">
-          Disco lights, future vibes, and a room full of humans trying to
-          out-human the bots.
+          Outsmart the bots. Deceive the humans. Fight for Humanity.
         </p>
 
+        <!-- LOBBY & GAME AUDIO -->
         <audio id="bgm" src="/bgm.mp3" loop></audio>
+        <audio id="bgmAnswer" src="/bgm_answer.mp3" loop></audio>
+        <audio id="bgmGuess" src="/bgm_guess.mp3" loop></audio>
+
+        <audio id="sfxQuestion" src="/sfx.mp3"></audio>
+        <audio id="sfxGuess" src="/sfx.mp3"></audio>
+        <audio id="sfxResults" src="/sfx.mp3"></audio>
 
         <div id="auth">
           <p class="muted">Enter your name to join a room.</p>
@@ -674,7 +714,7 @@
                 min="0"
                 max="1"
                 step="0.01"
-                value="0.35"
+                value="0.1"
               />
             </div>
           </div>
@@ -686,13 +726,16 @@
           <div class="section-header">
             <div>
               <h2>Room <span id="roomCodeLabel"></span></h2>
-              <p class="muted">
-                The AI host will create questions and answer alongside you.
-              </p>
             </div>
             <div>
               <p class="muted">Your score: <span id="myScore">0</span></p>
             </div>
+          </div>
+
+          <!-- HOST INTRO (AI host explains rules) -->
+          <div id="hostIntro" class="host-intro hidden">
+            <div class="host-avatar">🤖</div>
+            <div class="host-text" id="hostIntroText"></div>
           </div>
 
           <p>
@@ -709,7 +752,7 @@
             <h3>Game Controls</h3>
             <button id="startRoundBtn">▶️ Start New Round</button>
             <p class="muted">
-              Let the AI host drop a new disco question, then answer and guess
+              Carl will drop a new question. Answer and guess
               who’s human.
             </p>
           </div>
@@ -761,6 +804,8 @@
 
       let roomCode = null;
       let currentAnswers = [];
+      let myName = "";
+      let hostIntroShown = false;
 
       const authDiv = document.getElementById("auth");
       const gameDiv = document.getElementById("game");
@@ -768,11 +813,21 @@
       const playersList = document.getElementById("playersList");
       const myScore = document.getElementById("myScore");
       const phaseLabel = document.getElementById("phase");
-      const bgm = document.getElementById("bgm");
       const volumeSlider = document.getElementById("volumeSlider");
       const introOverlay = document.getElementById("introOverlay");
+      const hostIntro = document.getElementById("hostIntro");
+      const hostIntroText = document.getElementById("hostIntroText");
+
+      // Audio elements
+      const bgmLobby = document.getElementById("bgm");
+      const bgmAnswer = document.getElementById("bgmAnswer");
+      const bgmGuess = document.getElementById("bgmGuess");
+      const sfxQuestion = document.getElementById("sfxQuestion");
+      const sfxGuess = document.getElementById("sfxGuess");
+      const sfxResults = document.getElementById("sfxResults");
 
       let bgmStarted = false;
+      let countdownInterval = null;
 
       // Hide intro overlay after animations
       window.addEventListener("load", () => {
@@ -781,23 +836,61 @@
         }, 3500);
       });
 
-      function startBgmOnce() {
-        if (!bgm || bgmStarted) return;
-        bgmStarted = true;
-        if (volumeSlider) {
-          bgm.volume = parseFloat(volumeSlider.value);
-        }
-        bgm.play().catch((err) => {
-          console.log("Audio play blocked:", err);
+      function stopAllBgms() {
+        [bgmLobby, bgmAnswer, bgmGuess].forEach((a) => {
+          if (a) {
+            a.pause();
+            a.currentTime = 0;
+          }
         });
+      }
+
+      function playLoopBgm(audioEl) {
+        if (!audioEl) return;
+        stopAllBgms();
+        audioEl.loop = true;
+        audioEl.currentTime = 0;
+        audioEl
+          .play()
+          .catch((err) => console.log("BGM play blocked:", err));
+      }
+
+      function playSfx(audioEl) {
+        if (!audioEl) return;
+        audioEl.currentTime = 0;
+        audioEl
+          .play()
+          .catch((err) => console.log("SFX play blocked:", err));
+      }
+
+      function applyVolume() {
+        const v = parseFloat(volumeSlider?.value || "0.35");
+        if (isNaN(v)) return;
+        [bgmLobby, bgmAnswer, bgmGuess].forEach((a) => {
+          if (a) a.volume = v;
+        });
+        // Slightly louder SFX, but capped
+        [sfxQuestion, sfxGuess, sfxResults].forEach((s) => {
+          if (s) s.volume = Math.min(1, v + 0.2);
+        });
+      }
+
+      function startBgmOnce() {
+        if (!bgmLobby || bgmStarted) return;
+        bgmStarted = true;
+        applyVolume();
+        bgmLobby.loop = true;
+        bgmLobby
+          .play()
+          .catch((err) => console.log("Lobby BGM play blocked:", err));
       }
 
       document.addEventListener("click", startBgmOnce, { once: true });
 
-      if (volumeSlider && bgm) {
-        bgm.volume = parseFloat(volumeSlider.value);
-        volumeSlider.addEventListener("input", (e) => {
-          bgm.volume = parseFloat(e.target.value);
+      if (volumeSlider) {
+        applyVolume();
+        volumeSlider.addEventListener("input", () => {
+          applyVolume();
         });
       }
 
@@ -814,9 +907,54 @@
         });
       }
 
+      function clearCountdown() {
+        if (countdownInterval) {
+          clearInterval(countdownInterval);
+          countdownInterval = null;
+        }
+      }
+
+      function startCountdown(seconds, labelPrefix) {
+        clearCountdown();
+        let remaining = Math.floor(seconds);
+        const updateLabel = () => {
+          phaseLabel.innerText = `${labelPrefix} (${remaining}s left)`;
+        };
+        updateLabel();
+        countdownInterval = setInterval(() => {
+          remaining -= 1;
+          if (remaining <= 0) {
+            clearCountdown();
+            phaseLabel.innerText = `${labelPrefix} (time's up)`;
+          } else {
+            updateLabel();
+          }
+        }, 1000);
+      }
+
+      function showHostIntro() {
+        if (!hostIntro || !hostIntroText) return;
+        if (hostIntroShown) return;
+
+        const name = myName || "mysterious contestant";
+        hostIntroText.innerHTML = `
+          🎙 <strong>Welcome, ${name}!</strong> I'm your slightly suspicious host, Carl. Here's how this works:
+          <br><br>
+          <strong>1.</strong> I throw a weird prompt into the arena.<br>
+          <strong>2.</strong> You, other humans, and a bunch of bots all answer, trying to sound delightfully human.<br>
+          <strong>3.</strong> Then you see every answer and guess: <em>Human or AI?</em><br>
+          <strong>4.</strong> You score points for correct guesses, and bonus points if your human answer fools everyone into thinking you're a robot.
+          <br><br>
+          In short: talk like a human, guess like a detective, and try not to embarrass your species.
+        `;
+        hostIntro.classList.remove("hidden");
+        hostIntroShown = true;
+      }
+
       document.getElementById("createBtn").onclick = () => {
         const name = document.getElementById("nameInput").value.trim();
         if (!name) return;
+        myName = name;
         socket.emit("create_room", { playerName: name }, (res) => {
           if (res.error) {
             document.getElementById("authMsg").innerText = res.error;
@@ -834,6 +972,7 @@
           .value.trim()
           .toUpperCase();
         if (!name || !code) return;
+        myName = name;
         socket.emit(
           "join_room",
           { roomCode: code, playerName: name },
@@ -853,15 +992,17 @@
         gameDiv.classList.remove("hidden");
         roomCodeLabel.innerText = roomCode;
 
-        if (bgm && !bgm.paused) {
-          bgm.pause();
-          bgm.currentTime = 0;
-        }
+        // keep / start lobby bgm inside the room between rounds
+        playLoopBgm(bgmLobby);
+
+        // show host intro once
+        showHostIntro();
       }
 
       document.getElementById("startRoundBtn").onclick = () => {
         if (!roomCode) return;
-        phaseLabel.innerText = "Asking AI host for a new question...";
+        clearCountdown();
+        phaseLabel.innerText = "Asking Carl for a new question...";
         document.getElementById("answerPhase").classList.add("hidden");
         document.getElementById("guessPhase").classList.add("hidden");
         document.getElementById("resultsPhase").classList.add("hidden");
@@ -873,7 +1014,7 @@
         if (!text) return;
         socket.emit("submit_answer", { roomCode, text });
         document.getElementById("answerPhase").classList.add("hidden");
-        phaseLabel.innerText = "Waiting for other players to answer...";
+        // keep countdown running until server moves to guessing
       };
 
       document.getElementById("submitGuessesBtn").onclick = () => {
@@ -889,7 +1030,7 @@
         });
         socket.emit("submit_guesses", { roomCode, guesses });
         document.getElementById("guessPhase").classList.add("hidden");
-        phaseLabel.innerText = "Waiting for results...";
+        // keep countdown running until server sends results
       };
 
       socket.on("room_state", (room) => {
@@ -905,17 +1046,29 @@
         renderScoreboard(room.players);
       });
 
-      socket.on("round_started", ({ prompt }) => {
-        phaseLabel.innerText = "Answering";
+      socket.on("round_started", ({ prompt, answerDuration }) => {
+        const durMs = answerDuration || 60000;
         document.getElementById("answerPrompt").innerText = prompt;
         document.getElementById("answerText").value = "";
-        document.getElementById("answerPhase").classList.remove("hidden");
-        document.getElementById("guessPhase").classList.add("hidden");
-        document.getElementById("resultsPhase").classList.add("hidden");
+        document
+          .getElementById("answerPhase")
+          .classList.remove("hidden");
+        document
+          .getElementById("guessPhase")
+          .classList.add("hidden");
+        document
+          .getElementById("resultsPhase")
+          .classList.add("hidden");
+
+        // sound: question drop + answer-phase bgm
+        playSfx(sfxQuestion);
+        playLoopBgm(bgmAnswer);
+
+        startCountdown(durMs / 1000, "Answering");
       });
 
-      socket.on("start_guessing", ({ answers }) => {
-        phaseLabel.innerText = "Guessing";
+      socket.on("start_guessing", ({ answers, guessDuration }) => {
+        const durMs = guessDuration || 60000;
         currentAnswers = answers;
         const container = document.getElementById("guessContainer");
         container.innerHTML = "";
@@ -937,13 +1090,32 @@
         `;
           container.appendChild(div);
         });
-        document.getElementById("answerPhase").classList.add("hidden");
-        document.getElementById("guessPhase").classList.remove("hidden");
-        document.getElementById("resultsPhase").classList.add("hidden");
+        document
+          .getElementById("answerPhase")
+          .classList.add("hidden");
+        document
+          .getElementById("guessPhase")
+          .classList.remove("hidden");
+        document
+          .getElementById("resultsPhase")
+          .classList.add("hidden");
+
+        // sound: transition to guessing
+        playSfx(sfxGuess);
+        playLoopBgm(bgmGuess);
+
+        startCountdown(durMs / 1000, "Guessing");
       });
 
       socket.on("round_results", ({ answers, players }) => {
+        clearCountdown();
         phaseLabel.innerText = "Results";
+
+        // sound: stop phase bgm, play results sting, then return to lobby bgm
+        stopAllBgms();
+        playSfx(sfxResults);
+        playLoopBgm(bgmLobby);
+
         const resultsDiv = document.getElementById("resultsContainer");
         resultsDiv.innerHTML = "";
 
@@ -977,11 +1149,17 @@
 
         renderScoreboard(players);
 
-        document.getElementById("resultsPhase").classList.remove("hidden");
-        document.getElementById("guessPhase").classList.add("hidden");
+        document
+          .getElementById("resultsPhase")
+          .classList.remove("hidden");
+        document
+          .getElementById("guessPhase")
+          .classList.add("hidden");
       });
 
       socket.on("round_error", ({ message }) => {
+        clearCountdown();
+        stopAllBgms();
         phaseLabel.innerText = "Error: " + (message || "Unknown error");
       });
     </script>

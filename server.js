@@ -10,6 +10,10 @@ const io = new Server(server);
 
 const PORT = 3000;
 
+// durations
+const ANSWER_DURATION_MS = 60000;
+const GUESS_DURATION_MS = 60000;
+
 // ================== STATIC FILES ==================
 app.use(express.static('public'));
 
@@ -17,7 +21,16 @@ app.use(express.static('public'));
 // rooms[roomCode] = {
 //   code,
 //   players: { playerId: { name, score, isAI } },
-//   round: { stage, prompt, answers, guesses }
+//   round: {
+//     stage,          // 'answering' | 'guessing' | 'results' | 'finished'
+//     prompt,
+//     answers,        // [{ id, text, isAI, authorId }]
+//     guesses,        // [{ playerId, guesses: [{ answerId, guessedIsAI }] }]
+//     answerTimeout,
+//     guessTimeout,
+//     answerEndsAt,
+//     guessEndsAt
+//   }
 // }
 const rooms = {};
 
@@ -124,6 +137,55 @@ async function generateBotAnswers(room) {
   return answers;
 }
 
+// ================== ROUND HELPERS (TIMERS) ==================
+
+function startGuessingPhase(room) {
+  if (!room.round) return;
+  if (room.round.stage !== 'answering') return; // already moved on
+
+  // clear answer timer if still set
+  if (room.round.answerTimeout) {
+    clearTimeout(room.round.answerTimeout);
+    room.round.answerTimeout = null;
+  }
+
+  room.round.stage = 'guessing';
+  room.round.guessEndsAt = Date.now() + GUESS_DURATION_MS;
+
+  const shuffled = [...room.round.answers].sort(() => Math.random() - 0.5);
+
+  // start guess timer
+  const roomCode = room.code;
+  room.round.guessTimeout = setTimeout(() => {
+    const current = rooms[roomCode];
+    if (!current || !current.round) return;
+    if (current.round.stage !== 'guessing') return;
+    finishRound(current);
+  }, GUESS_DURATION_MS);
+
+  io.to(room.code).emit('start_guessing', {
+    answers: shuffled.map(a => ({ id: a.id, text: a.text })),
+    guessDuration: GUESS_DURATION_MS
+  });
+}
+
+function finishRound(room) {
+  if (!room.round) return;
+
+  // clear guess timer
+  if (room.round.guessTimeout) {
+    clearTimeout(room.round.guessTimeout);
+    room.round.guessTimeout = null;
+  }
+
+  scoreRound(room);
+
+  io.to(room.code).emit('round_results', {
+    answers: room.round.answers,
+    players: room.players
+  });
+}
+
 // ================== SOCKET.IO LOGIC ==================
 
 io.on('connection', (socket) => {
@@ -172,8 +234,7 @@ io.on('connection', (socket) => {
     io.to(roomCode).emit('room_state', room);
   });
 
-  // -------- START ROUND (AI is conceptual host) --------
-  // Any human can request a new round; AI generates prompt + bot answers.
+  // -------- START ROUND (AI host + timers) --------
   socket.on('start_round', async ({ roomCode }) => {
     const room = rooms[roomCode];
     if (!room) return;
@@ -187,11 +248,19 @@ io.on('connection', (socket) => {
     try {
       const prompt = await generatePrompt();
 
+      // clear any stale timers just in case
+      if (room.round?.answerTimeout) clearTimeout(room.round.answerTimeout);
+      if (room.round?.guessTimeout) clearTimeout(room.round.guessTimeout);
+
       room.round = {
-        stage: 'answering', // 'answering' | 'guessing' | 'results'
+        stage: 'answering', // 'answering' | 'guessing' | 'results' | 'finished'
         prompt,
         answers: [],
-        guesses: [] // {playerId, guesses: [{answerId, guessedIsAI}]}
+        guesses: [],
+        answerTimeout: null,
+        guessTimeout: null,
+        answerEndsAt: Date.now() + ANSWER_DURATION_MS,
+        guessEndsAt: null
       };
 
       // Bot players submit their answers immediately
@@ -201,8 +270,17 @@ io.on('connection', (socket) => {
       console.log('Room', roomCode, 'prompt:', prompt);
       console.log('Bot answers:', botAnswers.map(a => `${a.text} (by ${a.authorId})`));
 
+      // start answer timer
+      room.round.answerTimeout = setTimeout(() => {
+        const current = rooms[roomCode];
+        if (!current || !current.round) return;
+        if (current.round.stage !== 'answering') return;
+        startGuessingPhase(current);
+      }, ANSWER_DURATION_MS);
+
       io.to(roomCode).emit('round_started', {
-        prompt: room.round.prompt
+        prompt: room.round.prompt,
+        answerDuration: ANSWER_DURATION_MS
       });
     } catch (err) {
       console.error('Error starting round (prompt or bot answers):', err);
@@ -215,6 +293,12 @@ io.on('connection', (socket) => {
     if (!room || !room.round || room.round.stage !== 'answering') return;
 
     const answerId = 'h-' + socket.id;
+    // prevent double answer from same player
+    const already = room.round.answers.find(
+      a => !a.isAI && a.authorId === socket.id
+    );
+    if (already) return;
+
     room.round.answers.push({
       id: answerId,
       text,
@@ -228,14 +312,9 @@ io.on('connection', (socket) => {
       !a.isAI && humanIds.includes(a.authorId)
     ).length;
 
-    // When all humans have answered, move to guessing
+    // When all humans have answered, move to guessing immediately
     if (answersFromHumans === humanCount) {
-      room.round.stage = 'guessing';
-
-      const shuffled = [...room.round.answers].sort(() => Math.random() - 0.5);
-      io.to(roomCode).emit('start_guessing', {
-        answers: shuffled.map(a => ({ id: a.id, text: a.text }))
-      });
+      startGuessingPhase(room);
     }
   });
 
@@ -244,7 +323,7 @@ io.on('connection', (socket) => {
     const room = rooms[roomCode];
     if (!room || !room.round || room.round.stage !== 'guessing') return;
 
-    // Only store guesses from humans
+    // Only humans can submit guesses
     if (room.players[socket.id]?.isAI) return;
 
     // Overwrite previous guesses from this player if they resubmit
@@ -258,14 +337,9 @@ io.on('connection', (socket) => {
     const humanCount = getHumanIds(room).length;
     const humanGuessesCount = room.round.guesses.length;
 
+    // If all humans have guessed before time is up, finish early
     if (humanGuessesCount === humanCount) {
-      room.round.stage = 'results';
-      scoreRound(room);
-
-      io.to(roomCode).emit('round_results', {
-        answers: room.round.answers,
-        players: room.players
-      });
+      finishRound(room);
     }
   });
 
@@ -277,9 +351,11 @@ io.on('connection', (socket) => {
 
     delete room.players[socket.id];
 
-    // If no humans left, delete room (bots alone are pointless)
+    // If no humans left, clean up room + timers
     const humanIds = getHumanIds(room);
     if (humanIds.length === 0) {
+      if (room.round?.answerTimeout) clearTimeout(room.round.answerTimeout);
+      if (room.round?.guessTimeout) clearTimeout(room.round.guessTimeout);
       delete rooms[room.code];
     } else {
       io.to(room.code).emit('room_state', room);
